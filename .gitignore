@@ -1,0 +1,5 @@
+train_data/*
+__pycache__
+.vscode
+**/.DS_Store
+svc_pickle.p
