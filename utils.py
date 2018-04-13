@@ -55,10 +55,10 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
     for file in imgs:
         # Read in each one by one
         image = mpimg.imread(file)
-        img_features = single_img_features(image, color_space, spatial_size,
-                            hist_feat, orient,
-                            pix_per_cell, cell_per_block, hog_channel,
-                            spatial_feat, hist_feat, hog_feat)
+        img_features = single_img_features(image, color_space=color_space, spatial_size=spatial_size,
+                            hist_bins=hist_bins, orient=orient, 
+                            pix_per_cell=pix_per_cell, cell_per_block=cell_per_block, hog_channel=hog_channel,
+                            spatial_feat=spatial_feat, hist_feat=hist_feat, hog_feat=hog_feat)
         features.append(img_features)
     # Return list of feature vectors
     return features
@@ -70,6 +70,7 @@ def single_img_features(img, color_space='RGB', spatial_size=(32, 32),
                         hist_bins=32, orient=9, 
                         pix_per_cell=8, cell_per_block=2, hog_channel=0,
                         spatial_feat=True, hist_feat=True, hog_feat=True):    
+
     #1) Define an empty list to receive features
     img_features = []
     #2) Apply color conversion if other than 'RGB'
@@ -108,7 +109,7 @@ def single_img_features(img, color_space='RGB', spatial_size=(32, 32),
                         pix_per_cell, cell_per_block, vis=False, feature_vec=True)
         #8) Append features to list
         img_features.append(hog_features)
-
+    
     #9) Return concatenated array of features
     return np.concatenate(img_features)
     

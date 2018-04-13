@@ -2,6 +2,7 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle
+import glob
 import cv2
 from utils import *
 from scipy.ndimage.measurements import label
@@ -41,6 +42,7 @@ def draw_labeled_bboxes(img, labels):
 # Define a single function that can extract features using hog sub-sampling and make predictions
 def find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins):
     
+    # Scale to 0 between 1 to keep the same as training data
     img = img.astype(np.float32)/255
     
     img_tosearch = img[ystart:ystop,:,:]
@@ -69,8 +71,9 @@ def find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_c
     hog1 = get_hog_features(ch1, orient, pix_per_cell, cell_per_block, feature_vec=False)
     hog2 = get_hog_features(ch2, orient, pix_per_cell, cell_per_block, feature_vec=False)
     hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
-    
+
     box_list = []
+    feature_scores = []
     for xb in range(nxsteps):
         for yb in range(nysteps):
             ypos = yb*cells_per_step
@@ -94,8 +97,8 @@ def find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_c
             # Scale features and make a prediction
             test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))    
             test_prediction = svc.predict(test_features)
-            
-            if test_prediction == 1:
+            scores = svc.decision_function(test_features)
+            if test_prediction == 1 and scores[0] > 1 :
                 xbox_left = np.int(xleft*scale)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
@@ -117,32 +120,46 @@ hist_bins = dist_pickle["hist_bins"]
 
 ystart = 400
 ystop = 656
-scales = [1.5]
-heat_threshold = 6
+scales = [1.5, 2]
+heat_threshold = 2
 
-def find_multi_scale_bbxes(ystart, ystop, scales):
-    img = mpimg.imread('test_images/test5.jpg')
-    box_list = []
-    for scale in scales:
-        boxes = find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
-        box_list += boxes
-    heat = np.zeros_like(img[:,:,0]).astype(np.float)
-    # Add heat to each box in box list
-    heat = add_heat(heat,box_list)
-    # Apply threshold to help remove false positives
-    heat = apply_threshold(heat, heat_threshold)
-    # Visualize the heatmap when displaying    
-    heatmap = np.clip(heat, 0, 255)
-    # Find final boxes from heatmap using label function
-    labels = label(heatmap)
-    label_bbx_img = draw_labeled_bboxes(img, labels)
-    label_bbx_origin_img = draw_boxes(img,box_list)
-    f, (ax1, ax2) = plt.subplots(1,2)
-    ax1.imshow(label_bbx_origin_img)
-    ax2.imshow(label_bbx_img)
+def test():
+    img = mpimg.imread('test_images/test1.jpg')
+    scale = 1
+    boxes, feature_scores = find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
+    print(feature_scores)
+
+def find_multi_scale_bbxes():
+
+    fig = plt.figure(figsize=(8,8))
+    images = glob.glob('test_images/*.jpg')
+    length = len(images)
+    for i, file in enumerate(images):
+        img = mpimg.imread(file)
+        box_list = []
+        for scale in scales:
+            boxes = find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
+            box_list += boxes
+        heat = np.zeros_like(img[:,:,0]).astype(np.float)
+        # Add heat to each box in box list
+        heat = add_heat(heat,box_list)
+        # Apply threshold to help remove false positives
+        heat = apply_threshold(heat, heat_threshold)
+        # Visualize the heatmap when displaying    
+        heatmap = np.clip(heat, 0, 255)
+        # Find final boxes from heatmap using label function
+        labels = label(heatmap)
+        label_bbx_img = draw_labeled_bboxes(img, labels)
+        label_bbx_origin_img = draw_boxes(img,box_list)
+        fig.add_subplot(length, 2, i*2+1)
+        plt.imshow(label_bbx_origin_img)
+        fig.add_subplot(length, 2, i*2+2)
+        plt.imshow(label_bbx_img)
+
     plt.show()
 
 def pipeline(img):
+
     box_list = []
     for scale in scales:
         boxes = find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
@@ -169,4 +186,6 @@ def main():
     easy_clip.write_videofile(easy_output, audio=False)
 
 if __name__ == "__main__":
-    main()
+    find_multi_scale_bbxes()
+    #main()
+    #test()

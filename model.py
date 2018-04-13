@@ -36,9 +36,9 @@ spatial_size = (32,32)
 hist_bins = 32
 hist_range = (0, 256)
 
-spatial_feat = True
-hist_feat = True
-hog_feat = True
+spatial_feat = 1
+hist_feat = 1
+hog_feat = 1
 
 t=time.time()
 
@@ -83,7 +83,7 @@ X_test = X_scaler.transform(X_test)
 
 print('Using:',orient,'orientations',pix_per_cell,
     'pixels per cell and', cell_per_block,'cells per block')
-print('Feature vector length:', len(X_train[0]))
+
 # Use a linear SVC 
 svc = LinearSVC()
 # Check the training time for the SVC
@@ -100,6 +100,8 @@ print('My SVC predicts: ', svc.predict(X_test[0:n_predict]))
 print('For these',n_predict, 'labels: ', y_test[0:n_predict])
 t2 = time.time()
 print(round(t2-t, 5), 'Seconds to predict', n_predict,'labels with SVC')
+
+print(svc.decision_function(X_test[0:n_predict]))
 
 
 # Save svc model and parameters
