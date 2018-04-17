@@ -46,7 +46,7 @@ def find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_c
     img = img.astype(np.float32)/255
     
     img_tosearch = img[ystart:ystop,:,:]
-    ctrans_tosearch = convert_color(img_tosearch, color_space='RGB')
+    ctrans_tosearch = convert_color(img_tosearch, color_space='YCrCb')
     if scale != 1:
         imshape = ctrans_tosearch.shape
         ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1]/scale), np.int(imshape[0]/scale)))
@@ -73,16 +73,15 @@ def find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_c
     hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
 
     box_list = []
-    feature_scores = []
     for xb in range(nxsteps):
         for yb in range(nysteps):
             ypos = yb*cells_per_step
             xpos = xb*cells_per_step
             # Extract HOG for this patch
             hog_feat1 = hog1[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
-            #hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
-            #hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
-            hog_features = np.hstack((hog_feat1))
+            hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
+            hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
+            hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
 
             xleft = xpos*pix_per_cell
             ytop = ypos*pix_per_cell
@@ -98,7 +97,7 @@ def find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_c
             test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))    
             test_prediction = svc.predict(test_features)
             scores = svc.decision_function(test_features)
-            if test_prediction == 1 and scores[0] > 1 :
+            if test_prediction == 1 and scores[0] > score_threshold :
                 xbox_left = np.int(xleft*scale)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
@@ -120,18 +119,13 @@ hist_bins = dist_pickle["hist_bins"]
 
 ystart = 400
 ystop = 656
-scales = [1.5, 2]
+scales = [1, 1.5]
 heat_threshold = 2
-
-def test():
-    img = mpimg.imread('test_images/test1.jpg')
-    scale = 1
-    boxes, feature_scores = find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
-    print(feature_scores)
+score_threshold = 0.5
 
 def find_multi_scale_bbxes():
 
-    fig = plt.figure(figsize=(8,8))
+    fig = plt.figure(figsize=(10,10))
     images = glob.glob('test_images/*.jpg')
     length = len(images)
     for i, file in enumerate(images):
@@ -145,18 +139,41 @@ def find_multi_scale_bbxes():
         heat = add_heat(heat,box_list)
         # Apply threshold to help remove false positives
         heat = apply_threshold(heat, heat_threshold)
+
+
+        heatmap_img = cv2.applyColorMap(heat/np.max(heat)*255, cv2.COLORMAP_JET)
+        heatmap_shape = (int(heatmap_img.shape[0]/3), int(heatmap_img.shape[1]/3))
+        heatmap_img = cv2.resize(heatmap_img, heatmap_shape)
+
         # Visualize the heatmap when displaying    
+
         heatmap = np.clip(heat, 0, 255)
         # Find final boxes from heatmap using label function
         labels = label(heatmap)
         label_bbx_img = draw_labeled_bboxes(img, labels)
         label_bbx_origin_img = draw_boxes(img,box_list)
+
+        label_bbx_img_test = np.copy(label_bbx_img)
+
+        label_bbx_img_test[0:heatmap_shape[1], 0:heatmap_shape[0], :] = heatmap_img
         fig.add_subplot(length, 2, i*2+1)
         plt.imshow(label_bbx_origin_img)
         fig.add_subplot(length, 2, i*2+2)
         plt.imshow(label_bbx_img)
 
     plt.show()
+
+heats = []
+heat_avg_count = 20
+def get_average_heat(heat):
+    global heats
+    heats.append(np.copy(heat))
+    if len(heats) > heat_avg_count:
+        heats = heats[-heat_avg_count:]
+    return np.average(heats, axis=0) 
+
+def heatmap_img(heat):
+    return cv2.applyColorMap(heat/np.max(heat)*255, cv2.COLORMAP_JET)
 
 def pipeline(img):
 
@@ -168,13 +185,22 @@ def pipeline(img):
     heat = np.zeros_like(img[:,:,0]).astype(np.float)
     # Add heat to each box in box list
     heat = add_heat(heat,box_list)
+
+    heatmap_img = cv2.applyColorMap(heat/np.max(heat)*255, cv2.COLORMAP_JET)
+    heatmap_shape = (heatmap_img.shape[0]/3, heatmap_img.shape[1]/3)
+    heatmap_img = cv2.resize(heatmap_img, heatmap_shape)
+
+    #heat = get_average_heat(heat)
+
     # Apply threshold to help remove false positives
     heat = apply_threshold(heat, heat_threshold)
     # Visualize the heatmap when displaying    
-    heatmap = np.clip(heat, 0, 255)
+    heat = np.clip(heat, 0, 255)
     # Find final boxes from heatmap using label function
-    labels = label(heatmap)
+    labels = label(heat)
     label_bbx_img = draw_labeled_bboxes(img, labels)
+
+    label_bbx_img[0:heatmap_shape[0], 0:heatmap_shape[1], :] = heatmap_img
     return label_bbx_img
 
 def main():

@@ -7,7 +7,8 @@ import time
 from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from skimage.feature import hog
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn import svm
 from utils import *
 import pickle
 
@@ -26,15 +27,14 @@ print("number of cars", len(cars))
 print("number of notcars", len(notcars))
 
 ### TODO: Tweak these parameters and see how the results change.
-color_space = 'RGB' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+color_space = 'YCrCb' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
 orient = 9
-pix_per_cell = 8
 cell_per_block = 2
-hog_channel = 0 # Can be 0, 1, 2, or "ALL"
+pix_per_cell = 8
+hog_channel = "ALL" # Can be 0, 1, 2, or "ALL"
 
-spatial_size = (32,32)
+spatial_size = (32, 32)
 hist_bins = 32
-hist_range = (0, 256)
 
 spatial_feat = 1
 hist_feat = 1
@@ -70,7 +70,7 @@ print("shape of y", y.shape)
 # Split up data into randomized training and test sets
 rand_state = np.random.randint(0, 100)
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=rand_state)
+    X, y, test_size=0.1, random_state=rand_state)
 
 print("shape of train data", X_train.shape)
 print("shape of test data", X_train.shape)
@@ -85,10 +85,16 @@ print('Using:',orient,'orientations',pix_per_cell,
     'pixels per cell and', cell_per_block,'cells per block')
 
 # Use a linear SVC 
-svc = LinearSVC()
+#svc = LinearSVC(C=10)
 # Check the training time for the SVC
+svc = LinearSVC()
 t=time.time()
 svc.fit(X_train, y_train)
+
+#parameters = {'C':[1, 10]}
+#svc = GridSearchCV(svc, parameters)
+#svc.fit(X_train, y_train)
+
 t2 = time.time()
 print(round(t2-t, 2), 'Seconds to train SVC...')
 # Check the score of the SVC
