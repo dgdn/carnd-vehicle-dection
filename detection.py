@@ -123,7 +123,68 @@ scales = [1, 1.5]
 heat_threshold = 2
 score_threshold = 1
 
-def find_multi_scale_bbxes():
+heats = []
+heat_avg_count = 20
+debug = True
+
+def get_average_heat(heat):
+    global heats
+    heats.append(np.copy(heat))
+    if len(heats) > heat_avg_count:
+        heats = heats[-heat_avg_count:]
+    return np.average(heats, axis=0) 
+
+def heatmap_img(heat):
+    return cv2.applyColorMap(heat/np.max(heat)*255, cv2.COLORMAP_JET)
+
+def pipeline(img):
+
+    box_list = []
+    for scale in scales:
+        boxes = find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
+        box_list += boxes
+
+    heat = np.zeros_like(img[:,:,0]).astype(np.float)
+    # Add heat to each box in box list
+    heat = add_heat(heat,box_list)
+
+    if debug:
+        # Contruct Heat map for display
+        heatmap_img = heat/np.max(heat)*255
+        heatmap_img = cv2.merge((heatmap_img, heatmap_img, heatmap_img))
+        heatmap_img = cv2.applyColorMap(heatmap_img, cv2.COLORMAP_JET)
+        heatmap_shape = (int(heatmap_img.shape[0]/3), int(heatmap_img.shape[1]/3))
+        heatmap_img = cv2.resize(heatmap_img, (heatmap_shape[1], heatmap_shape[0]))
+
+    # Apply average smooth
+    heat = get_average_heat(heat)
+
+    # Apply threshold to help remove false positives
+    heat = apply_threshold(heat, heat_threshold)
+    # Visualize the heatmap when displaying    
+    heat = np.clip(heat, 0, 255)
+    # Find final boxes from heatmap using label function
+    labels = label(heat)
+    label_bbx_img = draw_labeled_bboxes(img, labels)
+
+
+    if debug:
+        # Add debug image
+        ori_box_img = cv2.resize(draw_boxes(img, box_list), (heatmap_shape[1], heatmap_shape[0]))
+        label_bbx_img[0:heatmap_shape[0], heatmap_shape[1]:heatmap_shape[1]*2, :] = ori_box_img
+        label_bbx_img[0:heatmap_shape[0], 0:heatmap_shape[1], :] = heatmap_img
+
+    return label_bbx_img
+
+def main():
+
+    # Process the video stream using the provided pipline
+    easy_output = 'project_video_output.mp4'
+    clip1 = VideoFileClip('project_video.mp4')
+    easy_clip = clip1.fl_image(pipeline)
+    easy_clip.write_videofile(easy_output, audio=False)
+
+def test():
 
     fig = plt.figure(figsize=(10,10))
     images = glob.glob('test_images/*.jpg')
@@ -148,8 +209,6 @@ def find_multi_scale_bbxes():
         # Apply threshold to help remove false positives
         heat = apply_threshold(heat, heat_threshold)
 
-
-
         # Visualize the heatmap when displaying    
 
         heatmap = np.clip(heat, 0, 255)
@@ -168,62 +227,7 @@ def find_multi_scale_bbxes():
 
     plt.show()
 
-heats = []
-heat_avg_count = 20
-def get_average_heat(heat):
-    global heats
-    heats.append(np.copy(heat))
-    if len(heats) > heat_avg_count:
-        heats = heats[-heat_avg_count:]
-    return np.average(heats, axis=0) 
-
-def heatmap_img(heat):
-    return cv2.applyColorMap(heat/np.max(heat)*255, cv2.COLORMAP_JET)
-
-def pipeline(img):
-
-    box_list = []
-    for scale in scales:
-        boxes = find_cars_bboxes(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
-        box_list += boxes
-
-    heat = np.zeros_like(img[:,:,0]).astype(np.float)
-    # Add heat to each box in box list
-    heat = add_heat(heat,box_list)
-
-    heatmap_img = heat/np.max(heat)*255
-    heatmap_img = cv2.merge((heatmap_img, heatmap_img, heatmap_img))
-    heatmap_img = cv2.applyColorMap(heatmap_img, cv2.COLORMAP_JET)
-    heatmap_shape = (int(heatmap_img.shape[0]/3), int(heatmap_img.shape[1]/3))
-    heatmap_img = cv2.resize(heatmap_img, (heatmap_shape[1], heatmap_shape[0]))
-
-    heat = get_average_heat(heat)
-
-    # Apply threshold to help remove false positives
-    heat = apply_threshold(heat, heat_threshold)
-
-    # Visualize the heatmap when displaying    
-    heat = np.clip(heat, 0, 255)
-    # Find final boxes from heatmap using label function
-    labels = label(heat)
-    label_bbx_img = draw_labeled_bboxes(img, labels)
-
-    ori_box_img = cv2.resize(draw_boxes(img, box_list), (heatmap_shape[1], heatmap_shape[0]))
-    
-    label_bbx_img[0:heatmap_shape[0], heatmap_shape[1]:heatmap_shape[1]*2, :] = ori_box_img
-
-    label_bbx_img[0:heatmap_shape[0], 0:heatmap_shape[1], :] = heatmap_img
-    return label_bbx_img
-
-def main():
-
-    # Process the video stream using the provided pipline
-    easy_output = 'project_video_output.mp4'
-    clip1 = VideoFileClip('project_video.mp4')
-    easy_clip = clip1.fl_image(pipeline)
-    easy_clip.write_videofile(easy_output, audio=False)
 
 if __name__ == "__main__":
-    #find_multi_scale_bbxes()
     main()
-    #test()
+    #1test()
